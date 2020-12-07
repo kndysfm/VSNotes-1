@@ -14,6 +14,7 @@ class VSNotesTreeView  {
       .join('|'));
     this.hideTags = config.get('treeviewHideTags');
     this.hideFiles = config.get('treeviewHideFiles');
+    this.tagSplitter = config.get('tagSplitter');
 
     this._onDidChangeTreeData = new vscode.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -30,7 +31,7 @@ class VSNotesTreeView  {
           this.tags = Promise.resolve(this._getTags(this.baseDir))
           return this.tags;
         case 'tag':
-          return node.files;
+          return node.nodes;
         case 'rootFile':
           return Promise.resolve(this._getDirectoryContents(this.baseDir));
         case 'file':
@@ -158,33 +159,58 @@ class VSNotesTreeView  {
           Promise.all(files).then(files => {
 
             // Build a tag index first
-            let tagIndex = {};
+            const pushTag = function(words, index, tags, filePayload) {
+              const w = words[index];
+              let node = tags.find(obj=>(obj.tag === w));
+              if (!node) {
+                tags.push({
+                  type: 'tag', 
+                  tag: w, 
+                  nodes: []
+                });
+                node = tags[tags.length - 1];
+              }
+              if (index < words.length - 1) {
+                pushTag(words, index + 1, node.nodes, filePayload);
+              } else {
+                node.nodes.push(filePayload);
+              }
+            };
+            const sortFunc = function(a,b) {
+              if (a.type != b.type) {
+                return (a.type < b.type)? +1: -1;
+              } else {
+                if (a.type === 'tag') {
+                  return (a.tag === b.tag) ? 0: ((a.tag > b.tag) ? +1 : -1);
+                } else if (a.type === 'file')  {
+                  return (a.file === b.file) ? 0 : ((a.file > b.file) ? +1 : -1);
+                } else {
+                  return 0;
+                }
+              }
+            };
+            const sortTags = function(tags) {
+              tags.sort(sortFunc);
+              for (const obj of tags) { 
+                if (obj.type === 'tag') {
+                  sortTags(obj.nodes)
+                }
+              }
+            };
+            let tagsRoot = [];
             for (let i = 0; i < files.length; i++) {
               if (files[i] != null && files[i]) {
                 const parsedFrontMatter = this._parseFrontMatter(files[i]);
                 if (parsedFrontMatter && 'tags' in parsedFrontMatter.data && parsedFrontMatter.data.tags) {
                   for (let tag of parsedFrontMatter.data.tags) {
-                    if (tag in tagIndex) {
-                      tagIndex[tag].push(files[i].payload);
-                    } else {
-                      tagIndex[tag] = [files[i].payload];
-                    }
+                    const words = this.tagSplitter? tag.split(this.tagSplitter): [tag];
+                    pushTag(words, 0, tagsRoot, files[i].payload);
                   }
                 }
               }
             }
-            // Then build an array of tags
-            let tags = []
-            for (let tag of Object.keys(tagIndex)) {
-              tags.push({
-                type: 'tag',
-                tag: tag,
-                files: tagIndex[tag]
-              })
-            }
-            // Sort tags alphabetically
-            tags.sort(function(a,b) {return (a.tag > b.tag) ? 1 : ((b.tag > a.tag) ? -1 : 0);} );
-            resolve(tags);
+            sortTags(tagsRoot);
+            resolve(tagsRoot);
           }).catch(err => {
             console.error(err)
           })
