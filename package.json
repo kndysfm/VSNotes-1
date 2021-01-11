@@ -121,7 +121,10 @@
                     "description": "Number of recent files to show when running command `List Notes`."
                 },
                 "vsnotes.noteTitleConvertSpaces": {
-                    "type": ["string", "null"],
+                    "type": [
+                        "string",
+                        "null"
+                    ],
                     "default": "_",
                     "description": "Automatically convert blank spaces in title to character. To disable set to `null`."
                 },
@@ -185,6 +188,11 @@
                     "type": "boolean",
                     "default": false,
                     "description": "Hide the files section in the sidebar. Requires application restart."
+                },
+                "vsnotes.tagSplitter": {
+                    "type": "string",
+                    "default": ".",
+                    "description": "Character or string to split leveled tags."
                 }
             }
         },
